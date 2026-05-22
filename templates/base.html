@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}数据分析系统{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'app.css' %}" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="container header__inner">
+        <a class="brand" href="{% url 'home' %}">数据分析系统</a>
+        <nav class="nav">
+          <a href="{% url 'home' %}">前端</a>
+          <a href="/admin/">管理后台</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container main">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">
+      <div class="container">
+        <small>{{ request.path }}</small>
+      </div>
+    </footer>
+  </body>
+</html>

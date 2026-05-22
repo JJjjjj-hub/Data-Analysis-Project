@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}首页 | Django Demo{% endblock %}
+
+{% block content %}
+  <h1>交互式数据分析系统（分类版）</h1>
+  <p>后端已提供数据上传/清洗/训练/统计/导出等 API。</p>
+  <div class="card">
+    <h2>下一步建议</h2>
+    <ol>
+      <li>启动前端：进入 <code>frontend/</code> 执行 <code>npm install</code> + <code>npm run dev</code></li>
+      <li>前端地址：<code>http://127.0.0.1:5173/</code></li>
+      <li>后端 API 前缀：<code>/api/...</code></li>
+    </ol>
+  </div>
+{% endblock %}
