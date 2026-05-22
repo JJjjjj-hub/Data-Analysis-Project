@@ -31,12 +31,19 @@ npm run dev
 
 ## API（核心）
 
+- 认证
+  - `POST /api/auth/register`（json：`username`/`password`）
+  - `POST /api/auth/login`（json：`username`/`password`）
+  - `POST /api/auth/logout`（需要 `Authorization: Token ...`）
+  - `GET /api/auth/me`（需要 `Authorization: Token ...`）
 - `POST /api/datasets/upload`（multipart: `file`，可选 `target_col`）
 - `POST /api/datasets/{dataset_id}/clean`（json：缺失值/异常值/类别规范化选项）
 - `POST /api/datasets/{dataset_id}/train`（json：`model=logistic_regression|random_forest` 等）
 - `POST /api/model-runs/{model_run_id}/predict`（json：`rows` + 可选 `threshold`）
 - `GET /api/datasets/{dataset_id}/stats`（query：`kind=count_by|box_by|scatter`）
 - `GET /api/datasets/{dataset_id}/export`（下载CSV）
+
+提示：`/api/*` 除认证接口外都需要先登录（前端会保存 Token 并自动附带请求头）。
 
 ## 目录结构
 

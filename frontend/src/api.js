@@ -5,12 +5,49 @@ export const api = axios.create({
   timeout: 60000,
 });
 
+const TOKEN_KEY = "dap_token";
+
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || "";
+}
+
+export function setToken(token) {
+  if (!token) localStorage.removeItem(TOKEN_KEY);
+  else localStorage.setItem(TOKEN_KEY, token);
+}
+
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Token ${token}`;
+  return config;
+});
+
 function unwrap(res) {
   if (!res.data || res.data.ok !== true) {
     const msg = res.data?.error?.message || "请求失败";
     throw new Error(msg);
   }
   return res.data;
+}
+
+export async function authRegister(username, password) {
+  const res = await api.post("/api/auth/register", { username, password });
+  return unwrap(res);
+}
+
+export async function authLogin(username, password) {
+  const res = await api.post("/api/auth/login", { username, password });
+  return unwrap(res);
+}
+
+export async function authMe() {
+  const res = await api.get("/api/auth/me");
+  return unwrap(res);
+}
+
+export async function authLogout() {
+  const res = await api.post("/api/auth/logout");
+  return unwrap(res);
 }
 
 export async function uploadDataset(file, targetCol = "depression_label") {
@@ -44,4 +81,3 @@ export async function predict(modelRunId, rows, threshold) {
   const res = await api.post(`/api/model-runs/${modelRunId}/predict`, { rows, threshold });
   return unwrap(res);
 }
-

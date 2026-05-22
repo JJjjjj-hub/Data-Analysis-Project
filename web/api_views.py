@@ -6,8 +6,9 @@ from typing import Any, Dict, Optional
 import joblib
 import pandas as pd
 from django.http import FileResponse
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .services.cleaning import CleaningOptions, clean_dataframe
@@ -21,6 +22,8 @@ from .services.storage import (
     dataset_csv_path,
     dataset_dir,
     dataset_meta,
+    ensure_dataset_owner,
+    ensure_model_run_owner,
     model_artifact_path,
     model_run_meta,
     update_model_run_metrics,
@@ -60,6 +63,7 @@ def _parse_bool(value: Any, default: bool) -> bool:
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def dataset_upload(request):
     try:
@@ -72,7 +76,12 @@ def dataset_upload(request):
         if not name.lower().endswith(".csv"):
             return _bad_request("仅支持CSV文件（.csv）")
 
-        dataset_id, raw_path = create_raw_dataset(uploaded, original_name=name)
+        dataset_id, raw_path = create_raw_dataset(
+            uploaded,
+            original_name=name,
+            owner_id=request.user.id,
+            owner_username=request.user.username,
+        )
         df = read_csv_flexible(raw_path)
 
         target_col = _get_target_col(request)
@@ -106,6 +115,7 @@ def dataset_upload(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 @parser_classes([JSONParser])
 def dataset_clean(request, dataset_id: str):
     try:
@@ -113,6 +123,10 @@ def dataset_clean(request, dataset_id: str):
         missing_strategy = (request.data.get("missing_strategy") or "auto").strip()
         outlier_strategy = (request.data.get("outlier_strategy") or "iqr_clip").strip()
         normalize_categories = _parse_bool(request.data.get("normalize_categories"), True)
+
+        meta = ensure_dataset_owner(dataset_id, owner_id=request.user.id, owner_username=request.user.username)
+        if meta.get("owner_id") != request.user.id:
+            return _bad_request("无权访问该数据集", code="forbidden", status=403)
 
         src_path = dataset_csv_path(dataset_id)
         df = read_csv_flexible(src_path)
@@ -125,7 +139,12 @@ def dataset_clean(request, dataset_id: str):
         )
         df_clean, report = clean_dataframe(df, options)
 
-        cleaned_dataset_id, cleaned_path = create_cleaned_dataset(dataset_id, original_name=dataset_meta(dataset_id).get("original_name"))
+        cleaned_dataset_id, cleaned_path = create_cleaned_dataset(
+            dataset_id,
+            original_name=dataset_meta(dataset_id).get("original_name"),
+            owner_id=request.user.id,
+            owner_username=request.user.username,
+        )
         cleaned_path.parent.mkdir(parents=True, exist_ok=True)
         df_clean.to_csv(cleaned_path, index=False)
         write_json(dataset_dir(cleaned_dataset_id) / "clean_report.json", report)
@@ -152,6 +171,7 @@ def dataset_clean(request, dataset_id: str):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 @parser_classes([JSONParser])
 def dataset_train(request, dataset_id: str):
     try:
@@ -163,6 +183,10 @@ def dataset_train(request, dataset_id: str):
         if model_name not in {"logistic_regression", "random_forest"}:
             return _bad_request("model 仅支持 logistic_regression 或 random_forest")
 
+        meta = ensure_dataset_owner(dataset_id, owner_id=request.user.id, owner_username=request.user.username)
+        if meta.get("owner_id") != request.user.id:
+            return _bad_request("无权访问该数据集", code="forbidden", status=403)
+
         src_path = dataset_csv_path(dataset_id)
         df = read_csv_flexible(src_path)
 
@@ -171,7 +195,12 @@ def dataset_train(request, dataset_id: str):
             TrainOptions(target_col=target_col, test_size=test_size, random_state=random_state),
             model=model_name,
         )
-        model_run_id = create_model_run(dataset_id, model_name=model_name)
+        model_run_id = create_model_run(
+            dataset_id,
+            model_name=model_name,
+            owner_id=request.user.id,
+            owner_username=request.user.username,
+        )
         artifact_path = model_artifact_path(model_run_id)
         joblib.dump(pipe, artifact_path)
         update_model_run_metrics(model_run_id, metrics)
@@ -186,10 +215,14 @@ def dataset_train(request, dataset_id: str):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 @parser_classes([JSONParser])
 def model_predict(request, model_run_id: str):
     try:
-        meta = model_run_meta(model_run_id)
+        meta = ensure_model_run_owner(model_run_id, owner_id=request.user.id, owner_username=request.user.username)
+        if meta.get("owner_id") != request.user.id:
+            return _bad_request("无权访问该模型", code="forbidden", status=403)
+
         artifact_path = model_artifact_path(model_run_id)
         if not artifact_path.exists():
             return _bad_request("模型文件不存在", code="not_found", status=404)
@@ -219,8 +252,12 @@ def model_predict(request, model_run_id: str):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def dataset_export(request, dataset_id: str):
     try:
+        meta = ensure_dataset_owner(dataset_id, owner_id=request.user.id, owner_username=request.user.username)
+        if meta.get("owner_id") != request.user.id:
+            return _bad_request("无权访问该数据集", code="forbidden", status=403)
         path = dataset_csv_path(dataset_id)
         filename = f"{dataset_id}.csv"
         return FileResponse(open(path, "rb"), as_attachment=True, filename=filename)  # noqa: SIM115
@@ -229,8 +266,12 @@ def dataset_export(request, dataset_id: str):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def dataset_stats(request, dataset_id: str):
     try:
+        meta = ensure_dataset_owner(dataset_id, owner_id=request.user.id, owner_username=request.user.username)
+        if meta.get("owner_id") != request.user.id:
+            return _bad_request("无权访问该数据集", code="forbidden", status=403)
         src_path = dataset_csv_path(dataset_id)
         df = read_csv_flexible(src_path)
 
