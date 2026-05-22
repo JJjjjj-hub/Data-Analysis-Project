@@ -2,7 +2,20 @@
 import { computed, ref, watch } from "vue";
 import DataPreview from "./components/DataPreview.vue";
 import EChart from "./components/EChart.vue";
-import { cleanDataset, exportDatasetUrl, predict, stats, trainDataset, uploadDataset } from "./api";
+import {
+  authLogin,
+  authLogout,
+  authMe,
+  authRegister,
+  cleanDataset,
+  exportDatasetUrl,
+  getToken,
+  predict,
+  setToken,
+  stats,
+  trainDataset,
+  uploadDataset,
+} from "./api";
 
 const steps = [
   { key: "upload", label: "1 上传" },
@@ -18,6 +31,10 @@ const uploadFile = ref(null);
 const fileInputEl = ref(null);
 const busy = ref(false);
 const error = ref("");
+
+const authedUser = ref(null);
+const authMode = ref("login"); // login | register
+const authForm = ref({ username: "", password: "" });
 
 const datasetId = ref("");
 const cleanedDatasetId = ref("");
@@ -93,6 +110,22 @@ function setError(e) {
   error.value = e?.message || String(e || "请求失败");
 }
 
+async function refreshMe() {
+  if (!getToken()) {
+    authedUser.value = null;
+    return;
+  }
+  try {
+    const out = await authMe();
+    authedUser.value = out.user;
+  } catch {
+    setToken("");
+    authedUser.value = null;
+  }
+}
+
+refreshMe();
+
 function goto(step) {
   activeStep.value = step;
   error.value = "";
@@ -117,6 +150,10 @@ function getSelectedFile() {
 }
 
 async function onUpload() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   const f = getSelectedFile();
   if (!f) {
     error.value = "请选择CSV文件";
@@ -143,6 +180,10 @@ async function onUpload() {
 }
 
 async function onClean() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   if (!datasetId.value) return;
   busy.value = true;
   error.value = "";
@@ -172,6 +213,10 @@ function rowsForPredict() {
 }
 
 async function onTrain() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   if (!usableDatasetId.value) return;
   busy.value = true;
   error.value = "";
@@ -190,6 +235,10 @@ async function onTrain() {
 }
 
 async function onPredictSample() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   if (!modelRunId.value) return;
   busy.value = true;
   error.value = "";
@@ -204,6 +253,10 @@ async function onPredictSample() {
 }
 
 async function loadCountBy() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {
@@ -232,6 +285,10 @@ async function loadCountBy() {
 }
 
 async function loadBoxBy() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {
@@ -260,6 +317,10 @@ async function loadBoxBy() {
 }
 
 async function loadScatter() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {
@@ -309,6 +370,36 @@ async function loadScatter() {
 }
 
 const exportUrl = computed(() => (usableDatasetId.value ? exportDatasetUrl(usableDatasetId.value) : ""));
+
+async function onAuthSubmit() {
+  busy.value = true;
+  error.value = "";
+  try {
+    const { username, password } = authForm.value;
+    const out = authMode.value === "register" ? await authRegister(username, password) : await authLogin(username, password);
+    setToken(out.token);
+    authedUser.value = out.user;
+    authForm.value.password = "";
+  } catch (e) {
+    setError(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function onLogout() {
+  busy.value = true;
+  error.value = "";
+  try {
+    await authLogout();
+  } catch {
+    // ignore
+  } finally {
+    setToken("");
+    authedUser.value = null;
+    busy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -335,10 +426,39 @@ const exportUrl = computed(() => (usableDatasetId.value ? exportDatasetUrl(usabl
       <div class="panel">
         <div class="panel__hd">
           <div class="panel__title">操作区</div>
-          <div class="muted">数据 {{ shortDatasetId }} · 模型 {{ shortModelRunId }}</div>
+          <div class="muted" v-if="authedUser">用户 {{ authedUser.username }} · 数据 {{ shortDatasetId }} · 模型 {{ shortModelRunId }}</div>
+          <div class="muted" v-else>未登录</div>
         </div>
         <div class="panel__bd">
           <p class="error" v-if="error">{{ error }}</p>
+
+          <div class="panel" style="margin-bottom: 14px" v-if="!authedUser">
+            <div class="panel__hd">
+              <div class="panel__title">{{ authMode === "login" ? "登录" : "注册" }}</div>
+              <div class="row" style="gap: 8px">
+                <button class="btn" @click="authMode = 'login'">登录</button>
+                <button class="btn" @click="authMode = 'register'">注册</button>
+              </div>
+            </div>
+            <div class="panel__bd">
+              <div class="row">
+                <div>
+                  <label>用户名</label><br />
+                  <input type="text" v-model="authForm.username" style="width: 220px" />
+                </div>
+                <div>
+                  <label>密码</label><br />
+                  <input type="password" v-model="authForm.password" style="width: 220px" />
+                </div>
+                <button class="btn btn--primary" :disabled="busy" @click="onAuthSubmit">{{ authMode === "login" ? "登录" : "注册并登录" }}</button>
+              </div>
+              <p class="muted" style="margin-top: 8px">登录后才能上传/清洗/分析/导出（用于区分不同用户的数据）。</p>
+            </div>
+          </div>
+
+          <div class="row" v-if="authedUser" style="margin-bottom: 12px">
+            <button class="btn btn--danger" :disabled="busy" @click="onLogout">退出登录</button>
+          </div>
 
           <template v-if="activeStep === 'upload'">
             <div class="row">
@@ -353,7 +473,7 @@ const exportUrl = computed(() => (usableDatasetId.value ? exportDatasetUrl(usabl
                   已选择：{{ getSelectedFile().name }}
                 </div>
               </div>
-              <button class="btn btn--primary" :disabled="busy" @click="onUpload">上传并预览</button>
+              <button class="btn btn--primary" :disabled="busy || !authedUser" @click="onUpload">上传并预览</button>
             </div>
             <p class="muted" style="margin-top: 10px">建议使用你提供的 `Teen_Mental_Health_Dataset.csv`。</p>
           </template>
@@ -495,10 +615,10 @@ const exportUrl = computed(() => (usableDatasetId.value ? exportDatasetUrl(usabl
 
           <div class="row" style="margin-top: 14px">
             <button class="btn" @click="goto('upload')">上传</button>
-            <button class="btn" :disabled="!datasetId" @click="goto('clean')">清洗</button>
-            <button class="btn" :disabled="!usableDatasetId" @click="goto('train')">分析</button>
-            <button class="btn" :disabled="!usableDatasetId" @click="goto('viz')">可视化</button>
-            <button class="btn" :disabled="!usableDatasetId" @click="goto('export')">导出</button>
+            <button class="btn" :disabled="!datasetId || !authedUser" @click="goto('clean')">清洗</button>
+            <button class="btn" :disabled="!usableDatasetId || !authedUser" @click="goto('train')">分析</button>
+            <button class="btn" :disabled="!usableDatasetId || !authedUser" @click="goto('viz')">可视化</button>
+            <button class="btn" :disabled="!usableDatasetId || !authedUser" @click="goto('export')">导出</button>
           </div>
         </div>
       </div>

@@ -55,7 +55,13 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def create_raw_dataset(uploaded_file, *, original_name: str) -> Tuple[str, Path]:
+def create_raw_dataset(
+    uploaded_file,
+    *,
+    original_name: str,
+    owner_id: Optional[int] = None,
+    owner_username: Optional[str] = None,
+) -> Tuple[str, Path]:
     ensure_dirs()
     dataset_id = str(uuid4())
     ddir = dataset_dir(dataset_id)
@@ -73,12 +79,20 @@ def create_raw_dataset(uploaded_file, *, original_name: str) -> Tuple[str, Path]
             "original_name": original_name,
             "created_at": _now_iso(),
             "file": "raw.csv",
+            "owner_id": owner_id,
+            "owner_username": owner_username,
         },
     )
     return dataset_id, raw_path
 
 
-def create_cleaned_dataset(source_dataset_id: str, *, original_name: Optional[str] = None) -> Tuple[str, Path]:
+def create_cleaned_dataset(
+    source_dataset_id: str,
+    *,
+    original_name: Optional[str] = None,
+    owner_id: Optional[int] = None,
+    owner_username: Optional[str] = None,
+) -> Tuple[str, Path]:
     ensure_dirs()
     dataset_id = str(uuid4())
     ddir = dataset_dir(dataset_id)
@@ -93,6 +107,8 @@ def create_cleaned_dataset(source_dataset_id: str, *, original_name: Optional[st
             "original_name": original_name,
             "created_at": _now_iso(),
             "file": "cleaned.csv",
+            "owner_id": owner_id,
+            "owner_username": owner_username,
         },
     )
     return dataset_id, cleaned_path
@@ -109,7 +125,13 @@ def dataset_csv_path(dataset_id: str) -> Path:
     return ddir / meta["file"]
 
 
-def create_model_run(dataset_id: str, *, model_name: str) -> str:
+def create_model_run(
+    dataset_id: str,
+    *,
+    model_name: str,
+    owner_id: Optional[int] = None,
+    owner_username: Optional[str] = None,
+) -> str:
     ensure_dirs()
     model_run_id = str(uuid4())
     mdir = model_run_dir(model_run_id)
@@ -123,9 +145,36 @@ def create_model_run(dataset_id: str, *, model_name: str) -> str:
             "created_at": _now_iso(),
             "artifact": "model.joblib",
             "metrics": None,
+            "owner_id": owner_id,
+            "owner_username": owner_username,
         },
     )
     return model_run_id
+
+
+def ensure_dataset_owner(dataset_id: str, *, owner_id: int, owner_username: str) -> Dict[str, Any]:
+    """
+    Legacy support: if a dataset meta has no owner set, claim it for the current user.
+    """
+    ddir = dataset_dir(dataset_id)
+    meta_path = ddir / "meta.json"
+    meta = read_json(meta_path)
+    if meta.get("owner_id") is None:
+        meta["owner_id"] = owner_id
+        meta["owner_username"] = owner_username
+        write_json(meta_path, meta)
+    return meta
+
+
+def ensure_model_run_owner(model_run_id: str, *, owner_id: int, owner_username: str) -> Dict[str, Any]:
+    mdir = model_run_dir(model_run_id)
+    meta_path = mdir / "meta.json"
+    meta = read_json(meta_path)
+    if meta.get("owner_id") is None:
+        meta["owner_id"] = owner_id
+        meta["owner_username"] = owner_username
+        write_json(meta_path, meta)
+    return meta
 
 
 def update_model_run_metrics(model_run_id: str, metrics: Dict[str, Any]) -> None:
@@ -143,4 +192,3 @@ def model_run_meta(model_run_id: str) -> Dict[str, Any]:
 def model_artifact_path(model_run_id: str) -> Path:
     meta = model_run_meta(model_run_id)
     return model_run_dir(model_run_id) / meta["artifact"]
-
