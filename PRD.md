@@ -1,8 +1,8 @@
 # PRD：交互式数据分析系统（青少年心理健康数据分类版）
 
 ## 1. 背景与目标
-- 交付可通过 Web 页面操作的数据分析系统，覆盖完整链路：上传 → 清洗 → 分析（分类）→ 可视化 → 导出
-- 对齐验收要点：链路闭环、至少 1 种分析功能、图表可交互、可演示可复现
+- 交付一个可通过 Web 页面操作的数据分析系统，覆盖完整链路：注册/登录 → 上传 → 清洗 → 训练 → 预测 → 可视化 → 导出。
+- 对齐实验验收点：基础功能闭环、至少 1 种分析功能、图表可交互、可演示可复现、支持多用户区分数据。
 
 ## 2. 数据与分析口径
 - 数据集样例：`Teen_Mental_Health_Dataset.csv`
@@ -10,90 +10,98 @@
   - 行：1200
   - 缺失：无
   - 类别不平衡：`depression_label=1` 约 2.6%
-- 分析功能（必做）
+- 必做分析功能
   - 任务：二分类预测 `depression_label`
   - 模型：`logistic_regression`（必做，`class_weight=balanced`）
+  - 对比：`random_forest`
   - 评估：Precision / Recall / F1 / ROC-AUC + 混淆矩阵
-  - 输出：预测概率 + 阈值可调（影响预测标签分布）
-- 加分项（可选）
-  - 多算法对比：增加 `random_forest` 并对比指标
+  - 输出：预测概率 + 阈值可调（影响最终标签）
 
-## 3. 用户与使用场景
-- 用户：课程小组成员（开发/演示/写个人文档）、老师/助教（验收）
-- 账号：每个用户需注册/登录，Token 认证，数据相互隔离
+## 3. 用户与场景
+- 用户：课程小组成员、老师/助教
+- 账号机制：每个用户需注册/登录，基于 Token 认证
+- 数据隔离：每个用户只能访问自己上传的数据和对应模型
 - 典型演示路径
-  1) **注册/登录** → 获取 Token，前端自动保存并在后续请求中附带
-  2) 上传样例 CSV → 自动预览前 20 行与列类型
-  3) 执行清洗（缺失值策略、异常值 IQR、类别规范化）
-  4) 训练模型并展示指标与混淆矩阵
-  5) 可视化（≥3）：柱状统计、箱线分布、散点相关
-  6) 导出清洗后 CSV
+  1. 注册/登录，前端保存 Token 并附带请求头
+  2. 上传 CSV，自动预览前 20 行与列类型
+  3. 执行清洗，查看清洗摘要
+  4. 训练模型并展示指标与混淆矩阵
+  5. 调整阈值做单条预测预览
+  6. 查看柱状统计、箱线分布、散点相关图
+  7. 导出清洗后 CSV
 
-## 4. 功能需求（模块）
-### 4.1 数据管理（必做）
-- **需登录**：所有数据接口需携带 `Authorization: Token xxx` 请求头
-- 上传 CSV（<10MB），返回 `dataset_id`，自动绑定当前用户
-- 预览前 N 行、列名、列类型推断（数值/类别/目标列）
-- 输出：`dataset_id`、预览数据、行数
-- 数据隔离：用户只能查看/操作自己上传的数据集
+## 4. 功能需求
+### 4.1 认证
+- 用户注册：用户名 + 密码，成功后返回 Token
+- 用户登录：用户名 + 密码，成功后返回 Token
+- 用户登出：失效当前 Token
+- 当前用户查询：返回登录态信息
 
-### 4.2 数据清洗（必做）
-- 缺失值处理（默认 auto：数值用中位数、类别用众数；可选 drop_rows）
-- 异常值检测与处理（IQR；默认 clip；可选 none / drop_rows）
-- 类别规范化（默认开启：trim + lower）
-- 输出：`cleaned_dataset_id` + 清洗摘要（行数变化、缺失统计、异常值统计）
+### 4.2 数据管理
+- 上传 CSV（<10MB），返回 `dataset_id`
+- 读取并预览前 N 行、列名、列类型推断
+- 所有数据接口必须认证
+- 数据只属于当前用户，其他用户不可见
 
-### 4.3 分析功能（必做）
+### 4.3 数据清洗
+- 缺失值处理：数值中位数、类别众数，或丢弃含缺失行
+- 异常值处理：IQR 截断、删除异常行、或不处理
+- 类别规范化：trim + lower
+- 输出清洗摘要：行数变化、缺失统计、异常值统计
+
+### 4.4 训练与预测
+- 训练：逻辑回归（必做）和随机森林（对比）
 - 预处理：数值标准化 + 类别 One-Hot
 - 划分：随机 80/20，分类任务使用分层抽样
-- 训练：逻辑回归（必做）；可选随机森林用于对比
-- 展示：指标、混淆矩阵、阈值滑块（用于展示概率→标签的变化）
+- 指标：Precision / Recall / F1 / ROC-AUC / 混淆矩阵
+- 预测：输入若干行样本，返回概率和阈值后的标签
 
-### 4.4 可视化（必做 ≥3）
-- 柱状统计：对 `gender / platform_usage / social_interaction_level / depression_label` 等列做计数
-- 箱线分布：数值列按分类列分组展示（min/Q1/median/Q3/max）
-- 散点相关：任意两数值列散点；可选按某列（如 label）分色
+### 4.5 统计可视化
+- 柱状统计：分类列计数
+- 箱线分布：数值列按分组列展示
+- 散点相关：任意两数值列散点，支持按类别分色
+- 统计接口只返回图表数据，前端负责渲染
 
-### 4.5 导出（必做）
-- 导出清洗后数据：CSV 下载（MVP）
+### 4.6 导出
+- 导出清洗后 CSV
+- 导出操作必须认证，且只能导出当前用户自己的数据
 
-## 5. 接口（高层级）
-
+## 5. 接口说明
 ### 认证接口
-- `POST /api/auth/register`（json：`username`, `password`）→ 返回 `token` 和 `user`
-- `POST /api/auth/login`（json：`username`, `password`）→ 返回 `token` 和 `user`
-- `POST /api/auth/logout`（Header: `Authorization: Token xxx`）→ 登出并清除 token
-- `GET /api/auth/me`（Header: `Authorization: Token xxx`）→ 返回当前用户信息
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
 
-### 数据接口（均需认证）
-- `POST /api/datasets/upload`（multipart：`file`，可选 `target_col`）
-- `POST /api/datasets/{dataset_id}/clean`（json：清洗选项）
-- `POST /api/datasets/{dataset_id}/train`（json：训练选项与模型名）
-- `POST /api/model-runs/{model_run_id}/predict`（json：rows + 可选 threshold）
-- `GET /api/datasets/{dataset_id}/stats`（query：图表数据）
-- `GET /api/datasets/{dataset_id}/export`（下载 CSV）
+### 数据接口
+- `POST /api/datasets/upload`
+- `POST /api/datasets/{dataset_id}/clean`
+- `POST /api/datasets/{dataset_id}/train`
+- `POST /api/model-runs/{model_run_id}/predict`
+- `GET /api/datasets/{dataset_id}/stats`
+- `GET /api/datasets/{dataset_id}/export`
 
 ## 6. 非功能需求
-- ~~仅开发环境：不做登录/权限~~ **已更新**：已实现基于 Token 的用户认证系统
-- 文件限制：只允许 `.csv`，大小 <10MB
-- 数据落盘：按 `UUID` 目录保存 raw/cleaned 与元数据；便于复现与演示
-- 用户隔离：每个数据集和模型运行关联 `owner_id`，用户只能访问自己的数据
+- 文件限制：仅 `.csv`，大小 <10MB
+- 存储方式：本地文件系统落盘，数据集和模型运行分目录保存
+- 归属字段：`owner_id` / `owner_username`
+- 认证方式：DRF Token Authentication
+- 前端：Vue 3 + Vite + ECharts，前后端分离开发
+- 开发环境：README 需同时提供 macOS/Linux 和 Windows 的启动方式，便于组员直接运行
 
-## 7. 验收测试用例
-- Happy path：注册 → 登录 → 上传 → 清洗 → 训练 → 可视化 → 导出全流程跑通
-- 认证相关：
-  - 未登录访问任意数据接口 → 返回 401
-  - 用户名重复注册 → 返回 409
-  - 密码不足6位 → 返回 400
-  - 错误密码登录 → 返回 401
-- 数据隔离：
-  - 用户A无法访问用户B的数据集/模型（返回 403）
-- 边界：
-  - 非 CSV / 空文件 / 列缺失（提示错误）
-  - 目标列不是 0/1 或只有单类（提示无法训练）
-  - 异常值策略切换（clip vs drop_rows）对行数/摘要有变化
+## 7. 验收标准
+- 能完成完整闭环：注册/登录 → 上传 → 清洗 → 训练 → 预测 → 可视化 → 导出
+- 未登录访问受保护接口返回 401
+- 用户 A 无法访问用户 B 的数据/模型，返回 403
+- 训练能返回合理指标，支持模型对比
+- 导出 CSV 可下载，且内容与当前用户数据一致
 
-## 8. 分工模板（待定）
+## 8. 测试用例
+- Happy path：注册 → 登录 → 上传 → 清洗 → 训练 → 预测 → 统计 → 导出
+- 认证：重复注册 409、错误密码 401、未登录访问 401
+- 隔离：跨用户访问 403
+- 边界：非 CSV、空文件、单类标签、列缺失、异常值策略切换
+
+## 9. 分工模板
 - 5 人：前端 / 后端 / 算法 / 文档 / 测试
 - 6 人：前端2 / 后端2 / 算法 / 文档&测试
-
