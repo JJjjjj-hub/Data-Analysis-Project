@@ -65,6 +65,39 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 source .venv/Scripts/activate
 ```
 
+如果 `npm install` 报错 `TAR_ENTRY_ERROR`、`EPERM`，或者启动时提示 `vite 不是内部或外部命令`，通常是前端依赖目录损坏或 npm 缓存目录权限问题。请按下面顺序处理：
+
+```powershell
+rmdir /s /q node_modules
+npm config set cache "%LOCALAPPDATA%\npm-cache" --global
+npm install --no-audit --no-fund
+npm run dev
+```
+
+如果还是失败，先确认当前目录是 `frontend`，并且 `package.json` 和 `node_modules` 没被杀毒软件/编辑器占用。
+
+## Windows 一键启动
+
+如果组员想最省事，可以直接在项目根目录双击或运行下面任意一个脚本：
+
+- `start-all.bat`：同时启动后端和前端
+- `start-backend.bat`：只启动后端
+- `start-frontend.bat`：只启动前端
+
+对应的 PowerShell 脚本也在根目录里：
+
+- `start-all.ps1`
+- `start-backend.ps1`
+- `start-frontend.ps1`
+
+说明：
+- 第一次运行会自动创建 `.venv` 并安装后端依赖
+- 第一次运行前端会自动安装 `node_modules`
+- 如果 PowerShell 执行策略拦截脚本，先执行：
+  ```powershell
+  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+  ```
+
 ## 核心功能
 
 - 多账户登录：`register / login / logout / me`
@@ -118,4 +151,6 @@ source .venv/Scripts/activate
 - `python3` 不存在时，用 `py -3`
 - `. .venv/bin/activate` 是 macOS / Linux 写法，Windows 要用 `Scripts` 目录
 - 如果前端页面能打开但接口失败，先确认后端在 `http://127.0.0.1:8000/` 正常运行
+- 如果 `npm install` 过程中出现 `TAR_ENTRY_ERROR`、`EPERM`，先删除 `frontend/node_modules`，再把 npm cache 改到 `%LOCALAPPDATA%\npm-cache`
+- 如果 `vite` 提示不是内部命令，先确认前一步 `npm install` 是否成功，再执行 `npm run dev`
 - 如果组员已经装过 Python / Node，但命令找不到，先重开终端再试

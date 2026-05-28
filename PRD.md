@@ -87,7 +87,7 @@
 - 归属字段：`owner_id` / `owner_username`
 - 认证方式：DRF Token Authentication
 - 前端：Vue 3 + Vite + ECharts，前后端分离开发
-- 开发环境：README 需同时提供 macOS/Linux 和 Windows 的启动方式，便于组员直接运行
+- 开发环境：README 需同时提供 macOS/Linux 和 Windows 的启动方式，并包含前端依赖安装失败（`TAR_ENTRY_ERROR`、`EPERM`、`vite` 未找到）的排查步骤，便于组员直接运行
 
 ## 7. 验收标准
 - 能完成完整闭环：注册/登录 → 上传 → 清洗 → 训练 → 预测 → 可视化 → 导出
