@@ -72,6 +72,13 @@ export async function exportDatasetUrl(datasetId) {
   return `${api.defaults.baseURL || ""}/api/datasets/${datasetId}/export`;
 }
 
+export async function downloadDatasetCsv(datasetId) {
+  const res = await api.get(`/api/datasets/${datasetId}/export`, {
+    responseType: "blob",
+  });
+  return res.data;
+}
+
 export async function stats(datasetId, params) {
   const res = await api.get(`/api/datasets/${datasetId}/stats`, { params });
   return unwrap(res);

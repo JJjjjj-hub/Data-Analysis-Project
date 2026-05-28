@@ -8,7 +8,7 @@ import {
   authMe,
   authRegister,
   cleanDataset,
-  exportDatasetUrl,
+  downloadDatasetCsv,
   getToken,
   predict,
   setToken,
@@ -369,8 +369,6 @@ async function loadScatter() {
   }
 }
 
-const exportUrl = computed(() => (usableDatasetId.value ? exportDatasetUrl(usableDatasetId.value) : ""));
-
 async function onAuthSubmit() {
   busy.value = true;
   error.value = "";
@@ -397,6 +395,34 @@ async function onLogout() {
   } finally {
     setToken("");
     authedUser.value = null;
+    busy.value = false;
+  }
+}
+
+async function onDownloadCsv() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
+  if (!usableDatasetId.value) {
+    error.value = "请先上传并清洗数据";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    const blob = await downloadDatasetCsv(usableDatasetId.value);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${usableDatasetId.value}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e) {
+    setError(e);
+  } finally {
     busy.value = false;
   }
 }
@@ -608,7 +634,7 @@ async function onLogout() {
           <template v-else-if="activeStep === 'export'">
             <p class="muted">导出清洗后数据（若已清洗则导出 cleaned，否则导出 raw）。</p>
             <div class="row">
-              <a class="btn btn--primary" :class="{ disabled: !exportUrl }" :href="exportUrl" target="_blank" rel="noreferrer">下载 CSV</a>
+              <button class="btn btn--primary" :disabled="busy || !authedUser" @click="onDownloadCsv">下载 CSV</button>
               <button class="btn" @click="goto('upload')">重新上传</button>
             </div>
           </template>
