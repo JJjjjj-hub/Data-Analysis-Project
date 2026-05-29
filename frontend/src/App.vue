@@ -129,6 +129,9 @@ function goto(step) {
   activeStep.value = step;
   error.value = "";
   chartOption.value = null;
+  cleanReport.value = null;
+  metrics.value = null;
+  predSample.value = null;
 }
 
 function setChart(type) {
@@ -268,11 +271,11 @@ async function loadCountBy() {
         text: `计数：${countByCol.value}`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 700 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
       },
       tooltip: {},
-      xAxis: { type: "category", data: labels, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", axisLabel: { color: "#6b7280" } },
+      xAxis: { type: "category", data: labels, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "bar", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
     };
@@ -300,11 +303,11 @@ async function loadBoxBy() {
         text: `箱线：${boxValueCol.value} by ${boxGroupCol.value}`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 700 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
       },
       tooltip: { trigger: "item" },
-      xAxis: { type: "category", data: groups, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", axisLabel: { color: "#6b7280" } },
+      xAxis: { type: "category", data: groups, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "boxplot", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
     };
@@ -332,11 +335,11 @@ async function loadScatter() {
           text: `散点：${scatterX.value} vs ${scatterY.value}`,
           left: "center",
           top: 8,
-          textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 820 },
+          textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 820 },
         },
         tooltip: { trigger: "item" },
-        xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#6b7280" } },
-        yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#6b7280" } },
+        xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#7a7a7a" } },
+        yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#7a7a7a" } },
         series: [{ type: "scatter", data: points.map((p) => [p.x, p.y]) }],
         grid: { left: 55, right: 20, top: 70, bottom: 50 },
       };
@@ -352,12 +355,12 @@ async function loadScatter() {
         text: `散点：${scatterX.value} vs ${scatterY.value}（按 ${scatterColor.value}）`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 820 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 820 },
       },
       tooltip: { trigger: "item" },
-      legend: { top: 36, left: "center", textStyle: { color: "#6b7280" } },
-      xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#6b7280" } },
+      legend: { top: 36, left: "center", textStyle: { color: "#7a7a7a" } },
+      xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#7a7a7a" } },
       series: Object.keys(groups).map((k) => ({ type: "scatter", name: String(k), data: groups[k] })),
       grid: { left: 55, right: 20, top: 92, bottom: 50 },
     };
@@ -461,7 +464,7 @@ async function onDownloadCsv() {
         </button>
       </nav>
 
-      <div style="padding: 12px 20px; border-top: 1px solid var(--border)">
+      <div class="sidebar__foot">
         <div class="muted" v-if="authedUser">
           数据 {{ shortDatasetId }}<br />模型 {{ shortModelRunId }}
         </div>
