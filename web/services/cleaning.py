@@ -9,7 +9,7 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class CleaningOptions:
-    target_col: str = "depression_label"
+    target_col: str = ""
     missing_strategy: str = "auto"  # auto | drop_rows
     outlier_strategy: str = "iqr_clip"  # none | iqr_clip | iqr_drop_rows
     normalize_categories: bool = True
@@ -62,7 +62,7 @@ def clean_dataframe(df: pd.DataFrame, options: CleaningOptions) -> Tuple[pd.Data
         report["notes"].append("missing_strategy=drop_rows")
     else:
         numeric_cols = [c for c in df_clean.columns if pd.api.types.is_numeric_dtype(df_clean[c])]
-        if options.target_col in numeric_cols:
+        if options.target_col and options.target_col in numeric_cols:
             numeric_cols = [c for c in numeric_cols if c != options.target_col]
         cat_cols = [c for c in df_clean.columns if c not in numeric_cols]
         for col in numeric_cols:
@@ -77,7 +77,8 @@ def clean_dataframe(df: pd.DataFrame, options: CleaningOptions) -> Tuple[pd.Data
 
     if options.outlier_strategy in {"iqr_clip", "iqr_drop_rows"}:
         numeric_cols = [c for c in df_clean.columns if pd.api.types.is_numeric_dtype(df_clean[c])]
-        numeric_cols = [c for c in numeric_cols if c != options.target_col]
+        if options.target_col:
+            numeric_cols = [c for c in numeric_cols if c != options.target_col]
         outlier_rows_mask = np.zeros(len(df_clean), dtype=bool)
         for col in numeric_cols:
             series = df_clean[col].astype(float)

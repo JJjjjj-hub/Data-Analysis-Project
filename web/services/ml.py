@@ -24,7 +24,7 @@ from .errors import UserFacingError
 
 @dataclass(frozen=True)
 class TrainOptions:
-    target_col: str = "depression_label"
+    target_col: str = ""
     test_size: float = 0.2
     random_state: int = 42
 
@@ -77,6 +77,8 @@ def build_rf_pipeline(numeric_cols: List[str], categorical_cols: List[str]) -> P
 
 
 def train_classifier(df: pd.DataFrame, options: TrainOptions, *, model: str) -> Tuple[Pipeline, Dict[str, Any]]:
+    if not options.target_col:
+        raise UserFacingError("请先选择目标列后再训练模型。")
     if options.target_col not in df.columns:
         raise UserFacingError(f"数据集中不存在目标列：{options.target_col}")
 

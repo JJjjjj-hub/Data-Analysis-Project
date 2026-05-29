@@ -25,7 +25,6 @@ const steps = [
 ];
 const activeStep = ref("upload");
 
-const targetCol = ref("depression_label");
 const uploadFile = ref(null);
 const fileInputEl = ref(null);
 const busy = ref(false);
@@ -43,14 +42,13 @@ const cleanReport = ref(null);
 const showAdvanced = ref(false);
 
 const cleaning = ref({
-  target_col: "depression_label",
   missing_strategy: "auto",
   outlier_strategy: "iqr_clip",
   normalize_categories: true,
 });
 
 const trainOpts = ref({
-  target_col: "depression_label",
+  target_col: "",
   model: "logistic_regression",
   test_size: 0.2,
   random_state: 42,
@@ -78,9 +76,10 @@ const shortModelRunId = computed(() => (modelRunId.value ? `${modelRunId.value.s
 const numericColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "numeric"));
 const categoricalColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "categorical"));
 const candidateRefCols = computed(() => {
-  const t = targetCol.value;
   const base = [...categoricalColumns.value];
-  if (columns.value.includes(t) && !base.includes(t)) base.push(t);
+  // 训练时选择的目标列也可作为分类参考列
+  const t = trainOpts.value.target_col;
+  if (t && columns.value.includes(t) && !base.includes(t)) base.push(t);
   return base;
 });
 
@@ -90,14 +89,15 @@ function pickIfMissing(currentRef, candidates, fallback) {
 }
 
 watch(
-  () => [columns.value, columnKinds.value, targetCol.value],
+  () => [columns.value, columnKinds.value],
   () => {
-    pickIfMissing(countByCol, candidateRefCols.value, targetCol.value);
-    pickIfMissing(boxGroupCol, candidateRefCols.value, targetCol.value);
-    pickIfMissing(scatterColor, candidateRefCols.value, targetCol.value);
-    pickIfMissing(boxValueCol, numericColumns.value, numericColumns.value[0] || boxValueCol.value);
-    pickIfMissing(scatterX, numericColumns.value, numericColumns.value[0] || scatterX.value);
-    pickIfMissing(scatterY, numericColumns.value, numericColumns.value[1] || numericColumns.value[0] || scatterY.value);
+    // Set defaults based on uploaded schema
+    pickIfMissing(countByCol, candidateRefCols.value, columns.value[0] || "");
+    pickIfMissing(boxGroupCol, candidateRefCols.value, columns.value[0] || "");
+    pickIfMissing(scatterColor, candidateRefCols.value, "");
+    pickIfMissing(boxValueCol, numericColumns.value, numericColumns.value[0] || "");
+    pickIfMissing(scatterX, numericColumns.value, numericColumns.value[0] || "");
+    pickIfMissing(scatterY, numericColumns.value, numericColumns.value[1] || numericColumns.value[0] || "");
   },
   { immediate: true },
 );
@@ -161,15 +161,15 @@ async function onUpload() {
   busy.value = true;
   error.value = "";
   try {
-    const out = await uploadDataset(f, targetCol.value);
+    const out = await uploadDataset(f);
     datasetId.value = out.dataset_id;
     cleanedDatasetId.value = "";
     columns.value = out.columns;
     previewRows.value = out.preview_rows;
     rowCount.value = out.row_count;
     columnKinds.value = out.column_kinds || {};
-    cleaning.value.target_col = targetCol.value;
-    trainOpts.value.target_col = targetCol.value;
+    // 默认选择最后一列作为目标列（常见的CSV格式）
+    trainOpts.value.target_col = out.columns[out.columns.length - 1] || "";
     goto("clean");
   } catch (e) {
     setError(e);
@@ -217,6 +217,10 @@ async function onTrain() {
     return;
   }
   if (!usableDatasetId.value) return;
+  if (!trainOpts.value.target_col) {
+    error.value = "请先选择目标列";
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {
@@ -463,10 +467,6 @@ async function onDownloadCsv() {
         </div>
         <div class="row">
           <div class="form-group">
-            <label>目标列</label>
-            <input type="text" v-model="targetCol" style="width: 220px" />
-          </div>
-          <div class="form-group">
             <label>选择 CSV 文件</label>
             <div class="file-row">
               <label class="file-btn">
@@ -478,6 +478,7 @@ async function onDownloadCsv() {
           </div>
           <button class="btn btn--primary" :disabled="busy || !authedUser" @click="onUpload">上传并预览</button>
         </div>
+        <p class="muted" style="margin-top: 10px">支持任意 CSV 文件，目标列将在训练步骤中选择。</p>
         <p class="muted mt-sm">建议使用 Teen_Mental_Health_Dataset.csv，目标列默认为 depression_label。</p>
       </div>
 
@@ -523,6 +524,13 @@ async function onDownloadCsv() {
         </div>
         <div class="row">
           <div class="form-group">
+            <label>目标列 *</label>
+            <select v-model="trainOpts.target_col" style="min-width: 150px">
+              <option value="">请选择目标列</option>
+              <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>模型</label>
             <select v-model="trainOpts.model">
               <option value="logistic_regression">logistic_regression</option>
@@ -537,8 +545,9 @@ async function onDownloadCsv() {
             <label>随机种子</label>
             <input type="number" v-model.number="trainOpts.random_state" style="width: 100px" />
           </div>
-          <button class="btn btn--primary" :disabled="busy" @click="onTrain">训练并评估</button>
+          <button class="btn btn--primary" :disabled="busy || !trainOpts.target_col" @click="onTrain">训练并评估</button>
         </div>
+        <p class="muted" style="margin-top: 8px">* 目标列应为二分类（0/1），用于监督学习训练</p>
         <div v-if="metrics" class="code mt-md">{{ JSON.stringify(metrics, null, 2) }}</div>
       </div>
 
