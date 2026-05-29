@@ -150,6 +150,7 @@ npm run dev
 
 - `python3` 不存在时，用 `py -3`
 - `. .venv/bin/activate` 是 macOS / Linux 写法，Windows 要用 `Scripts` 目录
+- 如果后端只输出 `numpy` 的 MINGW-W64 警告但不出现 `Starting development server...`，先删除 `.venv`，再用 `py -3` 重新创建虚拟环境；如果机器上同时装了 Conda，尽量先退出 `(base)` 环境再运行脚本
 - 如果前端页面能打开但接口失败，先确认后端在 `http://127.0.0.1:8000/` 正常运行
 - 如果 `npm install` 过程中出现 `TAR_ENTRY_ERROR`、`EPERM`，先删除 `frontend/node_modules`，再用项目内 `.npm-cache` 重新安装
 - 如果 `vite` 提示不是内部命令，先确认前一步 `npm install` 是否成功，再执行 `npm run dev`
