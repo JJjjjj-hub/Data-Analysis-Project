@@ -187,7 +187,10 @@ async function onClean() {
   busy.value = true;
   error.value = "";
   try {
-    const out = await cleanDataset(datasetId.value, cleaning.value);
+    const out = await cleanDataset(datasetId.value, {
+      ...cleaning.value,
+      target_col: trainOpts.value.target_col,
+    });
     cleanedDatasetId.value = out.cleaned_dataset_id;
     cleanReport.value = out.clean_report;
     columns.value = out.columns;
