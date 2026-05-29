@@ -67,7 +67,7 @@ const scatterY = ref("sleep_hours");
 const scatterColor = ref("");
 
 const chartOption = ref(null);
-const chartType = ref("count"); // count | box | scatter
+const chartType = ref("count"); // count | box | scatter | pie
 
 const usableDatasetId = computed(() => cleanedDatasetId.value || datasetId.value);
 const shortDatasetId = computed(() => (usableDatasetId.value ? `${usableDatasetId.value.slice(0, 8)}…` : "-"));
@@ -280,6 +280,49 @@ async function loadCountBy() {
       yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "bar", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
+    };
+  } catch (e) {
+    setError(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function loadPie() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    const out = await stats(usableDatasetId.value, { kind: "count_by", col: countByCol.value });
+    const counts = out.counts || {};
+    const labels = Object.keys(counts);
+    const values = labels.map((k) => counts[k]);
+    const pieData = labels.map((k, i) => ({ name: k, value: counts[k] }));
+    chartOption.value = {
+      title: {
+        text: `饼状图：${countByCol.value}`,
+        left: "center",
+        top: 8,
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
+      },
+      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+      legend: { top: 36, left: "center", textStyle: { color: "#7a7a7a" } },
+      series: [
+        {
+          type: "pie",
+          radius: ["25%", "55%"],
+          center: ["50%", "58%"],
+          avoidLabelOverlap: true,
+          itemStyle: { borderRadius: 6, borderColor: "#fff", borderWidth: 2 },
+          label: { show: true, formatter: "{b}\n{d}%", color: "#555" },
+          labelLine: { show: true },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0,0,0,0.3)" } },
+          data: pieData,
+        },
+      ],
     };
   } catch (e) {
     setError(e);
@@ -574,6 +617,7 @@ async function onDownloadCsv() {
         <div class="mb-sm" style="font-weight: 650; font-size: 14px">图表类型</div>
         <div class="chart-tabs mb-md">
           <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'count' }" @click="setChart('count')">柱状统计</button>
+          <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'pie' }" @click="setChart('pie')">饼状图</button>
           <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'box' }" @click="setChart('box')">箱线分布</button>
           <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'scatter' }" @click="setChart('scatter')">散点相关</button>
         </div>
@@ -586,6 +630,16 @@ async function onDownloadCsv() {
             </select>
           </div>
           <button class="btn btn--primary" :disabled="busy" @click="loadCountBy">生成柱状图</button>
+        </div>
+
+        <div class="row mt-sm" v-else-if="chartType === 'pie'">
+          <div class="form-group">
+            <label>分组列</label>
+            <select v-model="countByCol">
+              <option v-for="c in candidateRefCols" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <button class="btn btn--primary" :disabled="busy" @click="loadPie">生成饼状图</button>
         </div>
 
         <div class="row mt-sm" v-else-if="chartType === 'box'">
