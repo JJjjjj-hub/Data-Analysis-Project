@@ -75,6 +75,7 @@ const shortModelRunId = computed(() => (modelRunId.value ? `${modelRunId.value.s
 
 const numericColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "numeric"));
 const categoricalColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "categorical"));
+const scatterYOptions = computed(() => numericColumns.value.filter((c) => c !== scatterX.value));
 const binaryColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "binary"));
 const candidateRefCols = computed(() => {
   const base = [...categoricalColumns.value];
@@ -102,6 +103,14 @@ watch(
   },
   { immediate: true },
 );
+
+// 当 scatterX 变化时，如果 scatterY 和 scatterX 相同，自动切换到下一个可选列
+watch(scatterX, (newX) => {
+  if (scatterY.value === newX) {
+    const opts = scatterYOptions.value;
+    scatterY.value = opts[0] || "";
+  }
+});
 
 function setError(e) {
   error.value = e?.message || String(e || "请求失败");
@@ -706,7 +715,7 @@ async function onDownloadCsv() {
           <div class="form-group">
             <label>Y 轴</label>
             <select v-model="scatterY">
-              <option v-for="c in numericColumns" :key="c" :value="c">{{ c }}</option>
+              <option v-for="c in scatterYOptions" :key="c" :value="c">{{ c }}</option>
             </select>
           </div>
           <div class="form-group">
