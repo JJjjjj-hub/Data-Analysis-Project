@@ -2,11 +2,10 @@
 import { computed, ref, watch } from "vue";
 import DataPreview from "./components/DataPreview.vue";
 import EChart from "./components/EChart.vue";
+import LoginPage from "./components/LoginPage.vue";
 import {
-  authLogin,
   authLogout,
   authMe,
-  authRegister,
   cleanDataset,
   downloadDatasetCsv,
   getToken,
@@ -18,23 +17,20 @@ import {
 } from "./api";
 
 const steps = [
-  { key: "upload", label: "上传数据", icon: "📂" },
-  { key: "clean", label: "数据清洗", icon: "🧹" },
-  { key: "train", label: "模型分析", icon: "⚙️" },
-  { key: "viz", label: "可视化", icon: "📊" },
-  { key: "export", label: "导出数据", icon: "📥" },
+  { key: "upload", label: "上传数据" },
+  { key: "clean", label: "数据清洗" },
+  { key: "train", label: "模型分析" },
+  { key: "viz", label: "可视化" },
+  { key: "export", label: "导出数据" },
 ];
 const activeStep = ref("upload");
 
-const targetCol = ref("depression_label");
 const uploadFile = ref(null);
 const fileInputEl = ref(null);
 const busy = ref(false);
 const error = ref("");
 
 const authedUser = ref(null);
-const authMode = ref("login"); // login | register
-const authForm = ref({ username: "", password: "" });
 
 const datasetId = ref("");
 const cleanedDatasetId = ref("");
@@ -46,14 +42,13 @@ const cleanReport = ref(null);
 const showAdvanced = ref(false);
 
 const cleaning = ref({
-  target_col: "depression_label",
   missing_strategy: "auto",
-  outlier_strategy: "iqr_clip",
+  outlier_strategy: "none",
   normalize_categories: true,
 });
 
 const trainOpts = ref({
-  target_col: "depression_label",
+  target_col: "",
   model: "logistic_regression",
   test_size: 0.2,
   random_state: 42,
@@ -69,10 +64,10 @@ const boxValueCol = ref("daily_social_media_hours");
 const boxGroupCol = ref("gender");
 const scatterX = ref("daily_social_media_hours");
 const scatterY = ref("sleep_hours");
-const scatterColor = ref("depression_label");
+const scatterColor = ref("");
 
 const chartOption = ref(null);
-const chartType = ref("count"); // count | box | scatter
+const chartType = ref("count"); // count | box | scatter | pie
 
 const usableDatasetId = computed(() => cleanedDatasetId.value || datasetId.value);
 const shortDatasetId = computed(() => (usableDatasetId.value ? `${usableDatasetId.value.slice(0, 8)}…` : "-"));
@@ -80,10 +75,13 @@ const shortModelRunId = computed(() => (modelRunId.value ? `${modelRunId.value.s
 
 const numericColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "numeric"));
 const categoricalColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "categorical"));
+const scatterYOptions = computed(() => numericColumns.value.filter((c) => c !== scatterX.value));
+const binaryColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "binary"));
 const candidateRefCols = computed(() => {
-  const t = targetCol.value;
   const base = [...categoricalColumns.value];
-  if (columns.value.includes(t) && !base.includes(t)) base.push(t);
+  // 训练时选择的目标列也可作为分类参考列
+  const t = trainOpts.value.target_col;
+  if (t && columns.value.includes(t) && !base.includes(t)) base.push(t);
   return base;
 });
 
@@ -93,17 +91,26 @@ function pickIfMissing(currentRef, candidates, fallback) {
 }
 
 watch(
-  () => [columns.value, columnKinds.value, targetCol.value],
+  () => [columns.value, columnKinds.value],
   () => {
-    pickIfMissing(countByCol, candidateRefCols.value, targetCol.value);
-    pickIfMissing(boxGroupCol, candidateRefCols.value, targetCol.value);
-    pickIfMissing(scatterColor, candidateRefCols.value, targetCol.value);
-    pickIfMissing(boxValueCol, numericColumns.value, numericColumns.value[0] || boxValueCol.value);
-    pickIfMissing(scatterX, numericColumns.value, numericColumns.value[0] || scatterX.value);
-    pickIfMissing(scatterY, numericColumns.value, numericColumns.value[1] || numericColumns.value[0] || scatterY.value);
+    // Set defaults based on uploaded schema
+    pickIfMissing(countByCol, candidateRefCols.value, columns.value[0] || "");
+    pickIfMissing(boxGroupCol, candidateRefCols.value, columns.value[0] || "");
+    pickIfMissing(scatterColor, candidateRefCols.value, "");
+    pickIfMissing(boxValueCol, numericColumns.value, numericColumns.value[0] || "");
+    pickIfMissing(scatterX, numericColumns.value, numericColumns.value[0] || "");
+    pickIfMissing(scatterY, numericColumns.value, numericColumns.value[1] || numericColumns.value[0] || "");
   },
   { immediate: true },
 );
+
+// 当 scatterX 变化时，如果 scatterY 和 scatterX 相同，自动切换到下一个可选列
+watch(scatterX, (newX) => {
+  if (scatterY.value === newX) {
+    const opts = scatterYOptions.value;
+    scatterY.value = opts[0] || "";
+  }
+});
 
 function setError(e) {
   error.value = e?.message || String(e || "请求失败");
@@ -129,6 +136,9 @@ function goto(step) {
   activeStep.value = step;
   error.value = "";
   chartOption.value = null;
+  cleanReport.value = null;
+  metrics.value = null;
+  predSample.value = null;
 }
 
 function setChart(type) {
@@ -161,15 +171,16 @@ async function onUpload() {
   busy.value = true;
   error.value = "";
   try {
-    const out = await uploadDataset(f, targetCol.value);
+    const out = await uploadDataset(f);
     datasetId.value = out.dataset_id;
     cleanedDatasetId.value = "";
     columns.value = out.columns;
     previewRows.value = out.preview_rows;
     rowCount.value = out.row_count;
     columnKinds.value = out.column_kinds || {};
-    cleaning.value.target_col = targetCol.value;
-    trainOpts.value.target_col = targetCol.value;
+    // 默认选择第一个二分类列作为目标列，如果没有则留空
+    const binaryCols = out.columns.filter((c) => (out.column_kinds?.[c] || "") === "binary");
+    trainOpts.value.target_col = binaryCols[0] || "";
     goto("clean");
   } catch (e) {
     setError(e);
@@ -187,7 +198,10 @@ async function onClean() {
   busy.value = true;
   error.value = "";
   try {
-    const out = await cleanDataset(datasetId.value, cleaning.value);
+    const out = await cleanDataset(datasetId.value, {
+      ...cleaning.value,
+      target_col: trainOpts.value.target_col,
+    });
     cleanedDatasetId.value = out.cleaned_dataset_id;
     cleanReport.value = out.clean_report;
     columns.value = out.columns;
@@ -203,7 +217,8 @@ async function onClean() {
 }
 
 function rowsForPredict() {
-  const t = trainOpts.value.target_col || "depression_label";
+  const t = trainOpts.value.target_col;
+  if (!t) return [];
   return (previewRows.value || []).map((r) => {
     const copy = { ...r };
     delete copy[t];
@@ -217,6 +232,10 @@ async function onTrain() {
     return;
   }
   if (!usableDatasetId.value) return;
+  if (!trainOpts.value.target_col) {
+    error.value = "请先选择目标列";
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {
@@ -268,13 +287,56 @@ async function loadCountBy() {
         text: `计数：${countByCol.value}`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 700 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
       },
       tooltip: {},
-      xAxis: { type: "category", data: labels, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", axisLabel: { color: "#6b7280" } },
+      xAxis: { type: "category", data: labels, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "bar", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
+    };
+  } catch (e) {
+    setError(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function loadPie() {
+  if (!authedUser.value) {
+    error.value = "请先登录";
+    return;
+  }
+  busy.value = true;
+  error.value = "";
+  try {
+    const out = await stats(usableDatasetId.value, { kind: "count_by", col: countByCol.value });
+    const counts = out.counts || {};
+    const labels = Object.keys(counts);
+    const values = labels.map((k) => counts[k]);
+    const pieData = labels.map((k, i) => ({ name: k, value: counts[k] }));
+    chartOption.value = {
+      title: {
+        text: `饼状图：${countByCol.value}`,
+        left: "center",
+        top: 8,
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
+      },
+      tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+      legend: { top: 36, left: "center", textStyle: { color: "#7a7a7a" } },
+      series: [
+        {
+          type: "pie",
+          radius: ["25%", "55%"],
+          center: ["50%", "58%"],
+          avoidLabelOverlap: true,
+          itemStyle: { borderRadius: 6, borderColor: "#fff", borderWidth: 2 },
+          label: { show: true, formatter: "{b}\n{d}%", color: "#555" },
+          labelLine: { show: true },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0,0,0,0.3)" } },
+          data: pieData,
+        },
+      ],
     };
   } catch (e) {
     setError(e);
@@ -300,11 +362,11 @@ async function loadBoxBy() {
         text: `箱线：${boxValueCol.value} by ${boxGroupCol.value}`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 700 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
       },
       tooltip: { trigger: "item" },
-      xAxis: { type: "category", data: groups, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", axisLabel: { color: "#6b7280" } },
+      xAxis: { type: "category", data: groups, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "boxplot", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
     };
@@ -332,11 +394,11 @@ async function loadScatter() {
           text: `散点：${scatterX.value} vs ${scatterY.value}`,
           left: "center",
           top: 8,
-          textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 820 },
+          textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 820 },
         },
         tooltip: { trigger: "item" },
-        xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#6b7280" } },
-        yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#6b7280" } },
+        xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#7a7a7a" } },
+        yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#7a7a7a" } },
         series: [{ type: "scatter", data: points.map((p) => [p.x, p.y]) }],
         grid: { left: 55, right: 20, top: 70, bottom: 50 },
       };
@@ -352,12 +414,12 @@ async function loadScatter() {
         text: `散点：${scatterX.value} vs ${scatterY.value}（按 ${scatterColor.value}）`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 820 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 820 },
       },
       tooltip: { trigger: "item" },
-      legend: { top: 36, left: "center", textStyle: { color: "#6b7280" } },
-      xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#6b7280" } },
+      legend: { top: 36, left: "center", textStyle: { color: "#7a7a7a" } },
+      xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#7a7a7a" } },
       series: Object.keys(groups).map((k) => ({ type: "scatter", name: String(k), data: groups[k] })),
       grid: { left: 55, right: 20, top: 92, bottom: 50 },
     };
@@ -368,20 +430,8 @@ async function loadScatter() {
   }
 }
 
-async function onAuthSubmit() {
-  busy.value = true;
-  error.value = "";
-  try {
-    const { username, password } = authForm.value;
-    const out = authMode.value === "register" ? await authRegister(username, password) : await authLogin(username, password);
-    setToken(out.token);
-    authedUser.value = out.user;
-    authForm.value.password = "";
-  } catch (e) {
-    setError(e);
-  } finally {
-    busy.value = false;
-  }
+function onAuthenticated(user) {
+  authedUser.value = user;
 }
 
 async function onLogout() {
@@ -428,7 +478,9 @@ async function onDownloadCsv() {
 </script>
 
 <template>
-  <div class="app-shell">
+  <LoginPage v-if="!authedUser" @authenticated="onAuthenticated" />
+
+  <div class="app-shell" v-else>
     <!-- ── Sidebar ── -->
     <aside class="sidebar">
       <div class="sidebar__brand">
@@ -436,14 +488,9 @@ async function onDownloadCsv() {
         <div class="sidebar__sub">青少年心理健康 · 分类版</div>
       </div>
 
-      <!-- Auth -->
-      <div class="sidebar__user" v-if="authedUser">
+      <div class="sidebar__user">
         <span class="sidebar__username">{{ authedUser.username }}</span>
         <button class="btn btn--sm btn--danger" :disabled="busy" @click="onLogout">退出</button>
-      </div>
-      <div class="sidebar__user" v-else>
-        <span class="muted">未登录</span>
-        <button class="btn btn--sm btn--primary" @click="authMode = 'login'">登录</button>
       </div>
 
       <!-- Navigation -->
@@ -453,49 +500,21 @@ async function onDownloadCsv() {
           :key="s.key"
           class="nav-item"
           :class="{ 'nav-item--active': activeStep === s.key }"
-          :disabled="!authedUser && s.key !== 'upload'"
           @click="goto(s.key)"
         >
-          <span class="nav-item__icon">{{ s.icon }}</span>
           {{ s.label }}
         </button>
       </nav>
 
-      <div style="padding: 12px 20px; border-top: 1px solid var(--border)">
-        <div class="muted" v-if="authedUser">
+      <div class="sidebar__foot">
+        <div class="muted">
           数据 {{ shortDatasetId }}<br />模型 {{ shortModelRunId }}
         </div>
-        <div class="muted" v-else>请先登录后操作</div>
       </div>
     </aside>
 
     <!-- ── Main Content ── -->
     <main class="main">
-      <!-- Auth form (when not logged in) -->
-      <div class="section" v-if="!authedUser">
-        <div class="section__header">
-          <span class="section__title">{{ authMode === "login" ? "登录" : "注册" }}</span>
-          <div class="row gap-sm">
-            <button class="btn btn--sm" :class="{ 'btn--primary': authMode === 'login' }" @click="authMode = 'login'">登录</button>
-            <button class="btn btn--sm" :class="{ 'btn--primary': authMode === 'register' }" @click="authMode = 'register'">注册</button>
-          </div>
-        </div>
-        <div class="auth-inline">
-          <div class="form-group">
-            <label>用户名</label>
-            <input type="text" v-model="authForm.username" style="width: 200px" />
-          </div>
-          <div class="form-group">
-            <label>密码</label>
-            <input type="password" v-model="authForm.password" style="width: 200px" />
-          </div>
-          <button class="btn btn--primary" :disabled="busy" @click="onAuthSubmit">
-            {{ authMode === "login" ? "登录" : "注册并登录" }}
-          </button>
-        </div>
-        <p class="muted mt-sm">登录后才能上传、清洗、分析和导出数据。</p>
-      </div>
-
       <p class="error" v-if="error">{{ error }}</p>
 
       <!-- Step: Upload -->
@@ -506,17 +525,18 @@ async function onDownloadCsv() {
         </div>
         <div class="row">
           <div class="form-group">
-            <label>目标列</label>
-            <input type="text" v-model="targetCol" style="width: 220px" />
-          </div>
-          <div class="form-group">
             <label>选择 CSV 文件</label>
-            <input ref="fileInputEl" type="file" accept=".csv,text/csv" @change="onFileChange" />
-            <span class="muted" v-if="getSelectedFile()">已选择：{{ getSelectedFile().name }}</span>
+            <div class="file-row">
+              <label class="file-btn">
+                选择文件
+                <input ref="fileInputEl" type="file" accept=".csv,text/csv" @change="onFileChange" hidden />
+              </label>
+              <span class="file-name" v-if="getSelectedFile()">{{ getSelectedFile().name }}</span>
+            </div>
           </div>
           <button class="btn btn--primary" :disabled="busy || !authedUser" @click="onUpload">上传并预览</button>
         </div>
-        <p class="muted mt-sm">建议使用 Teen_Mental_Health_Dataset.csv，目标列默认为 depression_label。</p>
+        <p class="muted" style="margin-top: 10px">支持任意 CSV 文件，目标列将在训练步骤中选择。</p>
       </div>
 
       <!-- Step: Clean -->
@@ -561,6 +581,14 @@ async function onDownloadCsv() {
         </div>
         <div class="row">
           <div class="form-group">
+            <label>目标列 *</label>
+            <select v-model="trainOpts.target_col" style="min-width: 150px">
+              <option value="">请选择目标列</option>
+              <option v-for="c in binaryColumns" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <span v-if="binaryColumns.length === 0" class="muted" style="font-size: 12px; color: #dc2626;">未检测到二分类列(0/1)</span>
+          </div>
+          <div class="form-group">
             <label>模型</label>
             <select v-model="trainOpts.model">
               <option value="logistic_regression">logistic_regression</option>
@@ -576,8 +604,9 @@ async function onDownloadCsv() {
             <label>随机种子</label>
             <input type="number" v-model.number="trainOpts.random_state" style="width: 100px" />
           </div>
-          <button class="btn btn--primary" :disabled="busy" @click="onTrain">训练并评估</button>
+          <button class="btn btn--primary" :disabled="busy || !trainOpts.target_col" @click="onTrain">训练并评估</button>
         </div>
+        <p class="muted" style="margin-top: 8px">* 目标列应为二分类（0/1），用于监督学习训练</p>
         <div v-if="metrics" class="code mt-md">{{ JSON.stringify(metrics, null, 2) }}</div>
       </div>
 
@@ -597,13 +626,46 @@ async function onDownloadCsv() {
           </div>
         </div>
 
-        <div v-if="predSample" class="code mb-md">
-          {{ JSON.stringify({ threshold: predSample.threshold, positive: predSample.labels.filter((x) => x === 1).length, total: predSample.labels.length }, null, 2) }}
+        <!-- 预测结果展示 -->
+        <div v-if="predSample" class="prediction-result mb-md">
+          <div class="prediction-header">
+            <span class="prediction-title">预测结果概览</span>
+            <span class="prediction-threshold">阈值: {{ predSample.threshold }}</span>
+          </div>
+          <div class="prediction-stats">
+            <div class="stat-item">
+              <div class="stat-value">{{ predSample.labels?.length || 0 }}</div>
+              <div class="stat-label">总样本</div>
+            </div>
+            <div class="stat-item positive">
+              <div class="stat-value">{{ predSample.labels.filter((x) => x === 1).length }}</div>
+              <div class="stat-label">阳性预测</div>
+            </div>
+            <div class="stat-item negative">
+              <div class="stat-value">{{ predSample.labels.filter((x) => x === 0).length }}</div>
+              <div class="stat-label">阴性预测</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">{{ (predSample.proba.reduce((a, b) => a + b, 0) / predSample.proba.length * 100).toFixed(1) }}%</div>
+              <div class="stat-label">平均概率</div>
+            </div>
+          </div>
+          <div class="prediction-detail">
+            <div class="detail-item">
+              <span class="detail-label">最高概率:</span>
+              <span class="detail-value">{{ (Math.max(...predSample.proba) * 100).toFixed(1) }}%</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">最低概率:</span>
+              <span class="detail-value">{{ (Math.min(...predSample.proba) * 100).toFixed(1) }}%</span>
+            </div>
+          </div>
         </div>
 
         <div class="mb-sm" style="font-weight: 650; font-size: 14px">图表类型</div>
         <div class="chart-tabs mb-md">
           <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'count' }" @click="setChart('count')">柱状统计</button>
+          <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'pie' }" @click="setChart('pie')">饼状图</button>
           <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'box' }" @click="setChart('box')">箱线分布</button>
           <button class="chart-tab" :class="{ 'chart-tab--active': chartType === 'scatter' }" @click="setChart('scatter')">散点相关</button>
         </div>
@@ -616,6 +678,16 @@ async function onDownloadCsv() {
             </select>
           </div>
           <button class="btn btn--primary" :disabled="busy" @click="loadCountBy">生成柱状图</button>
+        </div>
+
+        <div class="row mt-sm" v-else-if="chartType === 'pie'">
+          <div class="form-group">
+            <label>分组列</label>
+            <select v-model="countByCol">
+              <option v-for="c in candidateRefCols" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <button class="btn btn--primary" :disabled="busy" @click="loadPie">生成饼状图</button>
         </div>
 
         <div class="row mt-sm" v-else-if="chartType === 'box'">
@@ -644,7 +716,7 @@ async function onDownloadCsv() {
           <div class="form-group">
             <label>Y 轴</label>
             <select v-model="scatterY">
-              <option v-for="c in numericColumns" :key="c" :value="c">{{ c }}</option>
+              <option v-for="c in scatterYOptions" :key="c" :value="c">{{ c }}</option>
             </select>
           </div>
           <div class="form-group">

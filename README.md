@@ -49,6 +49,7 @@ py manage.py runserver
 cd frontend
 npm install
 npm run dev
+
 ```
 
 打开（前端）：`http://127.0.0.1:5173/`

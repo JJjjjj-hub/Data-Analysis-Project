@@ -50,10 +50,9 @@ export async function authLogout() {
   return unwrap(res);
 }
 
-export async function uploadDataset(file, targetCol = "depression_label") {
+export async function uploadDataset(file) {
   const form = new FormData();
   form.append("file", file);
-  form.append("target_col", targetCol);
   const res = await api.post("/api/datasets/upload", form);
   return unwrap(res);
 }

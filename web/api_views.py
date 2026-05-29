@@ -43,7 +43,7 @@ def _max_upload_size_bytes() -> int:
 
 
 def _get_target_col(request) -> str:
-    return (request.data.get("target_col") or "depression_label").strip()
+    return (request.data.get("target_col") or "").strip()
 
 def _parse_bool(value: Any, default: bool) -> bool:
     if value is None:
@@ -83,8 +83,8 @@ def dataset_upload(request):
         )
         df = read_csv_flexible(raw_path)
 
-        target_col = _get_target_col(request)
-        col_kinds = infer_column_kinds(df, target_col=target_col if target_col in df.columns else None)
+        # 通用数据处理：不需要上传时指定目标列
+        col_kinds = infer_column_kinds(df, target_col=None)
         columns, rows = dataframe_preview(df, limit=20)
 
         write_json(
@@ -118,7 +118,8 @@ def dataset_upload(request):
 @parser_classes([JSONParser])
 def dataset_clean(request, dataset_id: str):
     try:
-        target_col = (request.data.get("target_col") or "depression_label").strip()
+        # 通用数据处理：清洗阶段不需要目标列
+        target_col = (request.data.get("target_col") or "").strip()
         missing_strategy = (request.data.get("missing_strategy") or "auto").strip()
         outlier_strategy = (request.data.get("outlier_strategy") or "iqr_clip").strip()
         normalize_categories = _parse_bool(request.data.get("normalize_categories"), True)
@@ -149,7 +150,8 @@ def dataset_clean(request, dataset_id: str):
         write_json(dataset_dir(cleaned_dataset_id) / "clean_report.json", report)
 
         columns, rows = dataframe_preview(df_clean, limit=20)
-        col_kinds = infer_column_kinds(df_clean, target_col=target_col if target_col in df_clean.columns else None)
+        # 通用数据处理：不强制要求目标列
+        col_kinds = infer_column_kinds(df_clean, target_col=target_col if target_col and target_col in df_clean.columns else None)
 
         return _ok(
             {
@@ -174,7 +176,11 @@ def dataset_clean(request, dataset_id: str):
 @parser_classes([JSONParser])
 def dataset_train(request, dataset_id: str):
     try:
-        target_col = (request.data.get("target_col") or "depression_label").strip()
+        # 通用数据处理：训练时必须指定目标列
+        target_col = (request.data.get("target_col") or "").strip()
+        if not target_col:
+            return _bad_request("必须指定目标列(target_col)用于训练")
+
         model_name = (request.data.get("model") or "logistic_regression").strip()
         test_size = float(request.data.get("test_size") or 0.2)
         random_state = int(request.data.get("random_state") or 42)

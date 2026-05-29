@@ -2,7 +2,7 @@
 import VChart from "vue-echarts";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import { BarChart, BoxplotChart, ScatterChart, LineChart } from "echarts/charts";
+import { BarChart, BoxplotChart, ScatterChart, LineChart, PieChart } from "echarts/charts";
 import {
   GridComponent,
   LegendComponent,
@@ -11,7 +11,7 @@ import {
   DatasetComponent,
 } from "echarts/components";
 
-use([CanvasRenderer, BarChart, BoxplotChart, ScatterChart, LineChart, GridComponent, LegendComponent, TitleComponent, TooltipComponent, DatasetComponent]);
+use([CanvasRenderer, BarChart, BoxplotChart, ScatterChart, LineChart, PieChart, GridComponent, LegendComponent, TitleComponent, TooltipComponent, DatasetComponent]);
 
 defineProps({
   option: { type: Object, required: true },
