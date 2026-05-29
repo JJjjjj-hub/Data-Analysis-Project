@@ -38,7 +38,6 @@ def _bad_request(message: str, *, code: str = "bad_request", status: int = 400) 
 def _ok(payload: Dict[str, Any], *, status: int = 200) -> Response:
     return Response({"ok": True, **payload}, status=status)
 
-
 def _max_upload_size_bytes() -> int:
     return 10 * 1024 * 1024
 
