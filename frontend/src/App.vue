@@ -43,7 +43,7 @@ const showAdvanced = ref(false);
 
 const cleaning = ref({
   missing_strategy: "auto",
-  outlier_strategy: "iqr_clip",
+  outlier_strategy: "none",
   normalize_categories: true,
 });
 
@@ -203,7 +203,8 @@ async function onClean() {
 }
 
 function rowsForPredict() {
-  const t = trainOpts.value.target_col || "depression_label";
+  const t = trainOpts.value.target_col;
+  if (!t) return [];
   return (previewRows.value || []).map((r) => {
     const copy = { ...r };
     delete copy[t];
