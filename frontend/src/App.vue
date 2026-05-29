@@ -76,6 +76,7 @@ const shortModelRunId = computed(() => (modelRunId.value ? `${modelRunId.value.s
 const numericColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "numeric"));
 const categoricalColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "categorical"));
 const scatterYOptions = computed(() => numericColumns.value.filter((c) => c !== scatterX.value));
+const binaryColumns = computed(() => columns.value.filter((c) => (columnKinds.value?.[c] || "") === "binary"));
 const candidateRefCols = computed(() => {
   const base = [...categoricalColumns.value];
   // 训练时选择的目标列也可作为分类参考列
@@ -177,8 +178,9 @@ async function onUpload() {
     previewRows.value = out.preview_rows;
     rowCount.value = out.row_count;
     columnKinds.value = out.column_kinds || {};
-    // 默认选择最后一列作为目标列（常见的CSV格式）
-    trainOpts.value.target_col = out.columns[out.columns.length - 1] || "";
+    // 默认选择第一个二分类列作为目标列，如果没有则留空
+    const binaryCols = out.columns.filter((c) => (out.column_kinds?.[c] || "") === "binary");
+    trainOpts.value.target_col = binaryCols[0] || "";
     goto("clean");
   } catch (e) {
     setError(e);
@@ -582,8 +584,9 @@ async function onDownloadCsv() {
             <label>目标列 *</label>
             <select v-model="trainOpts.target_col" style="min-width: 150px">
               <option value="">请选择目标列</option>
-              <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
+              <option v-for="c in binaryColumns" :key="c" :value="c">{{ c }}</option>
             </select>
+            <span v-if="binaryColumns.length === 0" class="muted" style="font-size: 12px; color: #dc2626;">未检测到二分类列(0/1)</span>
           </div>
           <div class="form-group">
             <label>模型</label>

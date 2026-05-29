@@ -26,15 +26,23 @@ def dataframe_preview(df: pd.DataFrame, *, limit: int = 20) -> Tuple[list[str], 
     return columns, rows
 
 
+def _is_binary_column(series: pd.Series) -> bool:
+    """检查列是否为二分类（只有0/1或0/1/缺失值）"""
+    if not pd.api.types.is_numeric_dtype(series):
+        return False
+    unique_vals = set(series.dropna().unique())
+    # 允许的值：{0}, {1}, {0, 1}
+    return unique_vals.issubset({0, 1}) and len(unique_vals) > 0
+
+
 def infer_column_kinds(df: pd.DataFrame, *, target_col: str | None = None) -> dict:
     kinds = {}
     for col in df.columns:
         col_name = str(col)
-        if target_col and col_name == target_col:
-            kinds[col_name] = "target"
-            continue
         series = df[col]
-        if pd.api.types.is_numeric_dtype(series):
+        if _is_binary_column(series):
+            kinds[col_name] = "binary"  # 二分类列，适合作为目标列
+        elif pd.api.types.is_numeric_dtype(series):
             kinds[col_name] = "numeric"
         else:
             kinds[col_name] = "categorical"
