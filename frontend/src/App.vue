@@ -613,8 +613,40 @@ async function onDownloadCsv() {
           </div>
         </div>
 
-        <div v-if="predSample" class="code mb-md">
-          {{ JSON.stringify({ threshold: predSample.threshold, positive: predSample.labels.filter((x) => x === 1).length, total: predSample.labels.length }, null, 2) }}
+        <!-- 预测结果展示 -->
+        <div v-if="predSample" class="prediction-result mb-md">
+          <div class="prediction-header">
+            <span class="prediction-title">预测结果概览</span>
+            <span class="prediction-threshold">阈值: {{ predSample.threshold }}</span>
+          </div>
+          <div class="prediction-stats">
+            <div class="stat-item">
+              <div class="stat-value">{{ predSample.labels?.length || 0 }}</div>
+              <div class="stat-label">总样本</div>
+            </div>
+            <div class="stat-item positive">
+              <div class="stat-value">{{ predSample.labels.filter((x) => x === 1).length }}</div>
+              <div class="stat-label">阳性预测</div>
+            </div>
+            <div class="stat-item negative">
+              <div class="stat-value">{{ predSample.labels.filter((x) => x === 0).length }}</div>
+              <div class="stat-label">阴性预测</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">{{ (predSample.proba.reduce((a, b) => a + b, 0) / predSample.proba.length * 100).toFixed(1) }}%</div>
+              <div class="stat-label">平均概率</div>
+            </div>
+          </div>
+          <div class="prediction-detail">
+            <div class="detail-item">
+              <span class="detail-label">最高概率:</span>
+              <span class="detail-value">{{ (Math.max(...predSample.proba) * 100).toFixed(1) }}%</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">最低概率:</span>
+              <span class="detail-value">{{ (Math.min(...predSample.proba) * 100).toFixed(1) }}%</span>
+            </div>
+          </div>
         </div>
 
         <div class="mb-sm" style="font-weight: 650; font-size: 14px">图表类型</div>
