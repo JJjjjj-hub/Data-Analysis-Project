@@ -178,9 +178,14 @@ def dataset_train(request, dataset_id: str):
         model_name = (request.data.get("model") or "logistic_regression").strip()
         test_size = float(request.data.get("test_size") or 0.2)
         random_state = int(request.data.get("random_state") or 42)
+        enable_cv = _parse_bool(request.data.get("enable_cv"), False)
+        cv_folds = int(request.data.get("cv_folds") or 3)
 
-        if model_name not in {"logistic_regression", "random_forest"}:
-            return _bad_request("model 仅支持 logistic_regression 或 random_forest")
+        if model_name not in {"logistic_regression", "linear_regression", "random_forest"}:
+            return _bad_request("model 仅支持 logistic_regression / linear_regression / random_forest")
+
+        if cv_folds < 2 or cv_folds > 5:
+            return _bad_request("cv_folds 必须在 2-5 之间")
 
         meta = ensure_dataset_owner(dataset_id, owner_id=request.user.id, owner_username=request.user.username)
         if meta.get("owner_id") != request.user.id:
@@ -191,7 +196,8 @@ def dataset_train(request, dataset_id: str):
 
         pipe, metrics = train_classifier(
             df,
-            TrainOptions(target_col=target_col, test_size=test_size, random_state=random_state),
+            TrainOptions(target_col=target_col, test_size=test_size, random_state=random_state,
+                         enable_cv=enable_cv, cv_folds=cv_folds),
             model=model_name,
         )
         model_run_id = create_model_run(
