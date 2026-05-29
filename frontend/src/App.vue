@@ -64,7 +64,7 @@ const boxValueCol = ref("daily_social_media_hours");
 const boxGroupCol = ref("gender");
 const scatterX = ref("daily_social_media_hours");
 const scatterY = ref("sleep_hours");
-const scatterColor = ref("depression_label");
+const scatterColor = ref("");
 
 const chartOption = ref(null);
 const chartType = ref("count"); // count | box | scatter
@@ -479,7 +479,6 @@ async function onDownloadCsv() {
           <button class="btn btn--primary" :disabled="busy || !authedUser" @click="onUpload">上传并预览</button>
         </div>
         <p class="muted" style="margin-top: 10px">支持任意 CSV 文件，目标列将在训练步骤中选择。</p>
-        <p class="muted mt-sm">建议使用 Teen_Mental_Health_Dataset.csv，目标列默认为 depression_label。</p>
       </div>
 
       <!-- Step: Clean -->
