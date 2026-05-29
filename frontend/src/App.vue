@@ -592,6 +592,7 @@ async function onDownloadCsv() {
             <label>模型</label>
             <select v-model="trainOpts.model">
               <option value="logistic_regression">logistic_regression</option>
+              <option value="linear_regression">linear_regression</option>
               <option value="random_forest">random_forest</option>
             </select>
           </div>
