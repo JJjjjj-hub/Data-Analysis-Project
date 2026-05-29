@@ -2,11 +2,10 @@
 import { computed, ref, watch } from "vue";
 import DataPreview from "./components/DataPreview.vue";
 import EChart from "./components/EChart.vue";
+import LoginPage from "./components/LoginPage.vue";
 import {
-  authLogin,
   authLogout,
   authMe,
-  authRegister,
   cleanDataset,
   downloadDatasetCsv,
   getToken,
@@ -18,11 +17,11 @@ import {
 } from "./api";
 
 const steps = [
-  { key: "upload", label: "上传数据", icon: "📂" },
-  { key: "clean", label: "数据清洗", icon: "🧹" },
-  { key: "train", label: "模型分析", icon: "⚙️" },
-  { key: "viz", label: "可视化", icon: "📊" },
-  { key: "export", label: "导出数据", icon: "📥" },
+  { key: "upload", label: "上传数据" },
+  { key: "clean", label: "数据清洗" },
+  { key: "train", label: "模型分析" },
+  { key: "viz", label: "可视化" },
+  { key: "export", label: "导出数据" },
 ];
 const activeStep = ref("upload");
 
@@ -33,8 +32,6 @@ const busy = ref(false);
 const error = ref("");
 
 const authedUser = ref(null);
-const authMode = ref("login"); // login | register
-const authForm = ref({ username: "", password: "" });
 
 const datasetId = ref("");
 const cleanedDatasetId = ref("");
@@ -129,6 +126,9 @@ function goto(step) {
   activeStep.value = step;
   error.value = "";
   chartOption.value = null;
+  cleanReport.value = null;
+  metrics.value = null;
+  predSample.value = null;
 }
 
 function setChart(type) {
@@ -268,11 +268,11 @@ async function loadCountBy() {
         text: `计数：${countByCol.value}`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 700 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
       },
       tooltip: {},
-      xAxis: { type: "category", data: labels, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", axisLabel: { color: "#6b7280" } },
+      xAxis: { type: "category", data: labels, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "bar", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
     };
@@ -300,11 +300,11 @@ async function loadBoxBy() {
         text: `箱线：${boxValueCol.value} by ${boxGroupCol.value}`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 700 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 700 },
       },
       tooltip: { trigger: "item" },
-      xAxis: { type: "category", data: groups, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", axisLabel: { color: "#6b7280" } },
+      xAxis: { type: "category", data: groups, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", axisLabel: { color: "#7a7a7a" } },
       series: [{ type: "boxplot", data: values }],
       grid: { left: 40, right: 20, top: 70, bottom: 40 },
     };
@@ -332,11 +332,11 @@ async function loadScatter() {
           text: `散点：${scatterX.value} vs ${scatterY.value}`,
           left: "center",
           top: 8,
-          textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 820 },
+          textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 820 },
         },
         tooltip: { trigger: "item" },
-        xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#6b7280" } },
-        yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#6b7280" } },
+        xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#7a7a7a" } },
+        yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#7a7a7a" } },
         series: [{ type: "scatter", data: points.map((p) => [p.x, p.y]) }],
         grid: { left: 55, right: 20, top: 70, bottom: 50 },
       };
@@ -352,12 +352,12 @@ async function loadScatter() {
         text: `散点：${scatterX.value} vs ${scatterY.value}（按 ${scatterColor.value}）`,
         left: "center",
         top: 8,
-        textStyle: { color: "#1a1a2e", fontSize: 14, overflow: "truncate", width: 820 },
+        textStyle: { color: "#1d1d1f", fontSize: 14, overflow: "truncate", width: 820 },
       },
       tooltip: { trigger: "item" },
-      legend: { top: 36, left: "center", textStyle: { color: "#6b7280" } },
-      xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#6b7280" } },
-      yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#6b7280" } },
+      legend: { top: 36, left: "center", textStyle: { color: "#7a7a7a" } },
+      xAxis: { type: "value", name: scatterX.value, axisLabel: { color: "#7a7a7a" } },
+      yAxis: { type: "value", name: scatterY.value, axisLabel: { color: "#7a7a7a" } },
       series: Object.keys(groups).map((k) => ({ type: "scatter", name: String(k), data: groups[k] })),
       grid: { left: 55, right: 20, top: 92, bottom: 50 },
     };
@@ -368,20 +368,8 @@ async function loadScatter() {
   }
 }
 
-async function onAuthSubmit() {
-  busy.value = true;
-  error.value = "";
-  try {
-    const { username, password } = authForm.value;
-    const out = authMode.value === "register" ? await authRegister(username, password) : await authLogin(username, password);
-    setToken(out.token);
-    authedUser.value = out.user;
-    authForm.value.password = "";
-  } catch (e) {
-    setError(e);
-  } finally {
-    busy.value = false;
-  }
+function onAuthenticated(user) {
+  authedUser.value = user;
 }
 
 async function onLogout() {
@@ -428,7 +416,9 @@ async function onDownloadCsv() {
 </script>
 
 <template>
-  <div class="app-shell">
+  <LoginPage v-if="!authedUser" @authenticated="onAuthenticated" />
+
+  <div class="app-shell" v-else>
     <!-- ── Sidebar ── -->
     <aside class="sidebar">
       <div class="sidebar__brand">
@@ -436,14 +426,9 @@ async function onDownloadCsv() {
         <div class="sidebar__sub">青少年心理健康 · 分类版</div>
       </div>
 
-      <!-- Auth -->
-      <div class="sidebar__user" v-if="authedUser">
+      <div class="sidebar__user">
         <span class="sidebar__username">{{ authedUser.username }}</span>
         <button class="btn btn--sm btn--danger" :disabled="busy" @click="onLogout">退出</button>
-      </div>
-      <div class="sidebar__user" v-else>
-        <span class="muted">未登录</span>
-        <button class="btn btn--sm btn--primary" @click="authMode = 'login'">登录</button>
       </div>
 
       <!-- Navigation -->
@@ -453,49 +438,21 @@ async function onDownloadCsv() {
           :key="s.key"
           class="nav-item"
           :class="{ 'nav-item--active': activeStep === s.key }"
-          :disabled="!authedUser && s.key !== 'upload'"
           @click="goto(s.key)"
         >
-          <span class="nav-item__icon">{{ s.icon }}</span>
           {{ s.label }}
         </button>
       </nav>
 
-      <div style="padding: 12px 20px; border-top: 1px solid var(--border)">
-        <div class="muted" v-if="authedUser">
+      <div class="sidebar__foot">
+        <div class="muted">
           数据 {{ shortDatasetId }}<br />模型 {{ shortModelRunId }}
         </div>
-        <div class="muted" v-else>请先登录后操作</div>
       </div>
     </aside>
 
     <!-- ── Main Content ── -->
     <main class="main">
-      <!-- Auth form (when not logged in) -->
-      <div class="section" v-if="!authedUser">
-        <div class="section__header">
-          <span class="section__title">{{ authMode === "login" ? "登录" : "注册" }}</span>
-          <div class="row gap-sm">
-            <button class="btn btn--sm" :class="{ 'btn--primary': authMode === 'login' }" @click="authMode = 'login'">登录</button>
-            <button class="btn btn--sm" :class="{ 'btn--primary': authMode === 'register' }" @click="authMode = 'register'">注册</button>
-          </div>
-        </div>
-        <div class="auth-inline">
-          <div class="form-group">
-            <label>用户名</label>
-            <input type="text" v-model="authForm.username" style="width: 200px" />
-          </div>
-          <div class="form-group">
-            <label>密码</label>
-            <input type="password" v-model="authForm.password" style="width: 200px" />
-          </div>
-          <button class="btn btn--primary" :disabled="busy" @click="onAuthSubmit">
-            {{ authMode === "login" ? "登录" : "注册并登录" }}
-          </button>
-        </div>
-        <p class="muted mt-sm">登录后才能上传、清洗、分析和导出数据。</p>
-      </div>
-
       <p class="error" v-if="error">{{ error }}</p>
 
       <!-- Step: Upload -->
@@ -511,8 +468,13 @@ async function onDownloadCsv() {
           </div>
           <div class="form-group">
             <label>选择 CSV 文件</label>
-            <input ref="fileInputEl" type="file" accept=".csv,text/csv" @change="onFileChange" />
-            <span class="muted" v-if="getSelectedFile()">已选择：{{ getSelectedFile().name }}</span>
+            <div class="file-row">
+              <label class="file-btn">
+                选择文件
+                <input ref="fileInputEl" type="file" accept=".csv,text/csv" @change="onFileChange" hidden />
+              </label>
+              <span class="file-name" v-if="getSelectedFile()">{{ getSelectedFile().name }}</span>
+            </div>
           </div>
           <button class="btn btn--primary" :disabled="busy || !authedUser" @click="onUpload">上传并预览</button>
         </div>
